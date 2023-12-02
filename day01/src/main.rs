@@ -7,21 +7,22 @@ use std::{
 fn main() -> anyhow::Result<()> {
     let file = File::open("day01.txt")?;
     let reader = BufReader::new(file);
-    let mut sum = 0usize;
 
-    for line in reader.lines() {
-        let line = line?;
-        let output = parser(&line);
-
-        if output.is_empty() {
-            continue;
-        }
-
-        let first = output.first().map(|v| v * 10).unwrap() as usize;
-        let last = *output.last().unwrap() as usize;
-
-        sum += first + last;
-    }
+    let sum = reader
+        .lines()
+        .map_while(Result::ok)
+        .map(|line| parser(&line))
+        .filter_map(|numbers| {
+            if numbers.is_empty() {
+                None
+            } else {
+                Some((
+                    *numbers.first().unwrap() as usize,
+                    *numbers.last().unwrap() as usize,
+                ))
+            }
+        })
+        .fold(0, |acc, (first, last)| acc + (first * 10) + last);
 
     println!("{sum}");
 
