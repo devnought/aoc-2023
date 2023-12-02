@@ -1,5 +1,6 @@
 use nom::{branch::alt, bytes::complete::tag, character::complete::char, Finish, IResult};
 use std::{
+    cmp::max,
     fs::File,
     io::{BufRead, BufReader},
 };
@@ -36,11 +37,18 @@ fn parser(input: &str) -> Vec<u8> {
     while !input.is_empty() {
         let res = valid_value(input).finish();
 
-        if let Ok((_, value)) = res {
+        if let Ok((remaining_input, value)) = res {
             output.push(value);
-        }
 
-        input = &input[1..];
+            if remaining_input.is_empty() {
+                input = "";
+            } else {
+                let start = max(1, input.len() - remaining_input.len() - 1);
+                input = &input[start..];
+            }
+        } else {
+            input = &input[1..];
+        }
     }
 
     output
