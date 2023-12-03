@@ -1,4 +1,7 @@
-use nom::{branch::alt, bytes::complete::tag, character::complete::char, Finish, IResult};
+use nom::{
+    branch::alt, bytes::complete::tag, character::complete::anychar, combinator::verify, Finish,
+    IResult,
+};
 use std::{
     cmp::max,
     fs::File,
@@ -56,16 +59,7 @@ fn parser(input: &str) -> Vec<u8> {
 
 fn valid_value(input: &str) -> IResult<&str, u8> {
     alt((
-        zero_digit,
-        one_digit,
-        two_digit,
-        three_digit,
-        four_digit,
-        five_digit,
-        six_digit,
-        seven_digit,
-        eight_digit,
-        nine_digit,
+        digit_value,
         zero_str,
         one_str,
         two_str,
@@ -79,54 +73,9 @@ fn valid_value(input: &str) -> IResult<&str, u8> {
     ))(input)
 }
 
-fn zero_digit(input: &str) -> IResult<&str, u8> {
-    let (input, _) = char('0')(input)?;
-    Ok((input, 0))
-}
-
-fn one_digit(input: &str) -> IResult<&str, u8> {
-    let (input, _) = char('1')(input)?;
-    Ok((input, 1))
-}
-
-fn two_digit(input: &str) -> IResult<&str, u8> {
-    let (input, _) = char('2')(input)?;
-    Ok((input, 2))
-}
-
-fn three_digit(input: &str) -> IResult<&str, u8> {
-    let (input, _) = char('3')(input)?;
-    Ok((input, 3))
-}
-
-fn four_digit(input: &str) -> IResult<&str, u8> {
-    let (input, _) = char('4')(input)?;
-    Ok((input, 4))
-}
-
-fn five_digit(input: &str) -> IResult<&str, u8> {
-    let (input, _) = char('5')(input)?;
-    Ok((input, 5))
-}
-
-fn six_digit(input: &str) -> IResult<&str, u8> {
-    let (input, _) = char('6')(input)?;
-    Ok((input, 6))
-}
-
-fn seven_digit(input: &str) -> IResult<&str, u8> {
-    let (input, _) = char('7')(input)?;
-    Ok((input, 7))
-}
-
-fn eight_digit(input: &str) -> IResult<&str, u8> {
-    let (input, _) = char('8')(input)?;
-    Ok((input, 8))
-}
-
-fn nine_digit(input: &str) -> IResult<&str, u8> {
-    let (input, _) = char('9')(input)?;
-    Ok((input, 9))
+fn digit_value(input: &str) -> IResult<&str, u8> {
+    let (input, v) = verify(anychar, |c| c.is_digit(10))(input)?;
+    Ok((input, v.to_digit(10).unwrap() as u8))
 }
 
 fn zero_str(input: &str) -> IResult<&str, u8> {
