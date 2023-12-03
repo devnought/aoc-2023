@@ -23,28 +23,28 @@ fn main() -> anyhow::Result<()> {
 fn part01() -> anyhow::Result<u64> {
     let ParsedData { symbols, values } = symbols_and_values()?;
     let mut seen_values = HashSet::new();
-    let mut sum = 0;
 
-    for symbol in symbols {
-        for coords in symbol.adjacent_cells() {
-            if let Some(stored_value) = values.get(&coords) {
-                if seen_values.contains(&stored_value.id) {
-                    continue;
-                }
+    let sum = symbols
+        .iter()
+        .flat_map(|symbol| symbol.adjacent_cells())
+        .filter_map(|coords| {
+            let stored_value = values.get(&coords)?;
 
+            if seen_values.contains(&stored_value.id) {
+                None
+            } else {
                 seen_values.insert(stored_value.id);
-
-                sum += stored_value.value;
+                Some(stored_value.value)
             }
-        }
-    }
+        })
+        .sum();
 
     Ok(sum)
 }
 
 fn part02() -> anyhow::Result<u64> {
     let ParsedData { symbols, values } = symbols_and_values()?;
-    let iter = symbols.iter().filter(|symbol| symbol.0 == '*');
+    let iter = symbols.iter().filter(|symbol| symbol.value() == '*');
     let mut sum = 0;
 
     for symbol in iter {
@@ -68,6 +68,7 @@ fn part02() -> anyhow::Result<u64> {
     Ok(sum)
 }
 
+#[derive(Debug)]
 struct ParsedData {
     symbols: Vec<Symbol>,
     values: HashMap<(i64, i64), StoredValue>,
@@ -87,18 +88,17 @@ fn symbols_and_values() -> anyhow::Result<ParsedData> {
     let mut symbols = Vec::new();
 
     for (v, s) in iter {
-        for value in v {
+        let stored_values = v.iter().map(|value| {
             let stored_value = StoredValue {
                 id: value.start,
                 value: value.value,
             };
 
-            values.insert(value.coords(), stored_value);
-        }
+            (value.coords(), stored_value)
+        });
 
-        for symbol in s {
-            symbols.push(symbol);
-        }
+        values.extend(stored_values);
+        symbols.extend(s);
     }
 
     Ok(ParsedData { symbols, values })
@@ -114,6 +114,10 @@ struct StoredValue {
 struct Symbol(char, i64, i64);
 
 impl Symbol {
+    fn value(&self) -> char {
+        self.0
+    }
+
     fn adjacent_cells(&self) -> [(i64, i64); 8] {
         let x = self.1;
         let y = self.2;
