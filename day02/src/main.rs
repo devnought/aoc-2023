@@ -114,30 +114,25 @@ fn parser(input: &str) -> Option<Game> {
 }
 
 fn record_start(input: &str) -> IResult<&str, u64> {
-    let (input, (_, _, _, num, _, _)) =
-        tuple((multispace0, tag("Game"), space0, u64, char(':'), space0))(input)?;
-
-    Ok((input, num))
+    let parser = tuple((multispace0, tag("Game"), space0, u64, char(':'), space0));
+    map(parser, |(_, _, _, num, _, _)| num)(input)
 }
 
 fn game_record(input: &str) -> IResult<&str, Game> {
-    let (input, (id, sets)) = tuple((record_start, cube_set_terminators))(input)?;
-    Ok((input, Game(id, sets)))
+    let parser = tuple((record_start, cube_set_terminators));
+    map(parser, |(id, sets)| Game(id, sets))(input)
 }
 
 fn red(input: &str) -> IResult<&str, Colour> {
-    let (input, _) = tag("red")(input)?;
-    Ok((input, Colour::Red))
+    map(tag("red"), |_| Colour::Red)(input)
 }
 
 fn green(input: &str) -> IResult<&str, Colour> {
-    let (input, _) = tag("green")(input)?;
-    Ok((input, Colour::Green))
+    map(tag("green"), |_| Colour::Green)(input)
 }
 
 fn blue(input: &str) -> IResult<&str, Colour> {
-    let (input, _) = tag("blue")(input)?;
-    Ok((input, Colour::Blue))
+    map(tag("blue"), |_| Colour::Blue)(input)
 }
 
 fn colour(input: &str) -> IResult<&str, Colour> {
@@ -145,42 +140,41 @@ fn colour(input: &str) -> IResult<&str, Colour> {
 }
 
 fn cube(input: &str) -> IResult<&str, Cube> {
-    let (input, (num, _, colour)) = tuple((u64, space0, colour))(input)?;
-
-    Ok((input, Cube(num, colour)))
+    let parser = tuple((u64, space0, colour));
+    map(parser, |(num, _, colour)| Cube(num, colour))(input)
 }
 
 fn separator(input: &str) -> IResult<&str, ()> {
-    let (input, _) = opt(tuple((char(','), space0)))(input)?;
-    Ok((input, ()))
+    let parser = opt(tuple((char(','), space0)));
+    map(parser, |_| ())(input)
 }
 
 fn cube_separator(input: &str) -> IResult<&str, Cube> {
-    let (input, (cube, _, _)) = tuple((cube, space0, separator))(input)?;
-    Ok((input, cube))
+    let parser = tuple((cube, space0, separator));
+    map(parser, |(cube, _, _)| cube)(input)
 }
 
 fn cube_set(input: &str) -> IResult<&str, Vec<Cube>> {
-    let (input, cubes) = many0(cube_separator)(input)?;
-    Ok((input, cubes))
+    many0(cube_separator)(input)
 }
 
 fn terminator(input: &str) -> IResult<&str, ()> {
-    let (input, _) = opt(tuple((char(';'), space0)))(input)?;
-    Ok((input, ()))
+    let parser = opt(tuple((char(';'), space0)));
+    map(parser, |_| ())(input)
 }
 
 fn cube_set_terminator(input: &str) -> IResult<&str, Vec<Cube>> {
-    let (input, (cubes, _)) = tuple((cube_set, terminator))(input)?;
-    Ok((input, cubes))
+    let parser = tuple((cube_set, terminator));
+    map(parser, |(cubes, _)| cubes)(input)
 }
 
 fn cube_set_terminators(input: &str) -> IResult<&str, Vec<Vec<Cube>>> {
     let newline = map(tuple((newline, multispace0)), |_| ());
     let eof = map(eof, |_| ());
     let end = alt((newline, eof));
-    let (input, (cubes, _)) = many_till(cube_set_terminator, end)(input)?;
-    Ok((input, cubes))
+    let parser = many_till(cube_set_terminator, end);
+
+    map(parser, |(cubes, _)| cubes)(input)
 }
 
 #[cfg(test)]
