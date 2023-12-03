@@ -1,6 +1,9 @@
 use nom::{
-    branch::alt, bytes::complete::tag, character::complete::anychar, combinator::verify, Finish,
-    IResult,
+    branch::alt,
+    bytes::complete::tag,
+    character::complete::anychar,
+    combinator::{map, verify},
+    Finish, IResult,
 };
 use std::{
     cmp::max,
@@ -74,56 +77,46 @@ fn valid_value(input: &str) -> IResult<&str, u8> {
 }
 
 fn digit_value(input: &str) -> IResult<&str, u8> {
-    let (input, v) = verify(anychar, |c| c.is_digit(10))(input)?;
-    Ok((input, v.to_digit(10).unwrap() as u8))
+    let parser = verify(anychar, |c| c.is_digit(10));
+    map(parser, |c| c.to_digit(10).unwrap() as u8)(input)
 }
 
 fn zero_str(input: &str) -> IResult<&str, u8> {
-    let (input, _) = tag("zero")(input)?;
-    Ok((input, 0))
+    map(tag("zero"), |_| 0)(input)
 }
 
 fn one_str(input: &str) -> IResult<&str, u8> {
-    let (input, _) = tag("one")(input)?;
-    Ok((input, 1))
+    map(tag("one"), |_| 1)(input)
 }
 
 fn two_str(input: &str) -> IResult<&str, u8> {
-    let (input, _) = tag("two")(input)?;
-    Ok((input, 2))
+    map(tag("two"), |_| 2)(input)
 }
 
 fn three_str(input: &str) -> IResult<&str, u8> {
-    let (input, _) = tag("three")(input)?;
-    Ok((input, 3))
+    map(tag("three"), |_| 3)(input)
 }
 
 fn four_str(input: &str) -> IResult<&str, u8> {
-    let (input, _) = tag("four")(input)?;
-    Ok((input, 4))
+    map(tag("four"), |_| 4)(input)
 }
 
 fn five_str(input: &str) -> IResult<&str, u8> {
-    let (input, _) = tag("five")(input)?;
-    Ok((input, 5))
+    map(tag("five"), |_| 5)(input)
 }
 
 fn six_str(input: &str) -> IResult<&str, u8> {
-    let (input, _) = tag("six")(input)?;
-    Ok((input, 6))
+    map(tag("six"), |_| 6)(input)
 }
 
 fn seven_str(input: &str) -> IResult<&str, u8> {
-    let (input, _) = tag("seven")(input)?;
-    Ok((input, 7))
+    map(tag("seven"), |_| 7)(input)
 }
 
 fn eight_str(input: &str) -> IResult<&str, u8> {
-    let (input, _) = tag("eight")(input)?;
-    Ok((input, 8))
+    map(tag("eight"), |_| 8)(input)
 }
 
 fn nine_str(input: &str) -> IResult<&str, u8> {
-    let (input, _) = tag("nine")(input)?;
-    Ok((input, 9))
+    map(tag("nine"), |_| 9)(input)
 }
