@@ -1,7 +1,7 @@
 use nom::{
     branch::alt,
     bytes::complete::tag,
-    character::complete::{char, multispace0, newline, space0},
+    character::complete::{char, multispace0, newline, space0, u64},
     combinator::{eof, map, opt},
     multi::{many0, many_till},
     sequence::tuple,
@@ -114,14 +114,8 @@ fn parser(input: &str) -> Option<Game> {
 }
 
 fn record_start(input: &str) -> IResult<&str, u64> {
-    let (input, (_, _, _, num, _, _)) = tuple((
-        multispace0,
-        tag("Game"),
-        space0,
-        nom::character::complete::u64,
-        char(':'),
-        space0,
-    ))(input)?;
+    let (input, (_, _, _, num, _, _)) =
+        tuple((multispace0, tag("Game"), space0, u64, char(':'), space0))(input)?;
 
     Ok((input, num))
 }
@@ -151,7 +145,7 @@ fn colour(input: &str) -> IResult<&str, Colour> {
 }
 
 fn cube(input: &str) -> IResult<&str, Cube> {
-    let (input, (num, _, colour)) = tuple((nom::character::complete::u64, space0, colour))(input)?;
+    let (input, (num, _, colour)) = tuple((u64, space0, colour))(input)?;
 
     Ok((input, Cube(num, colour)))
 }
@@ -317,7 +311,7 @@ mod tests {
 
     #[test]
     fn game_record_test() {
-        let res = game_record("Game 1: 3 blue, 4 red; 1 red, 2 green, 6 blue; 2 green")
+        let res = game_record("Game 1: 3 blue, 4 red; 1 red, 2 green, 6 blue; 2 green    ")
             .finish()
             .unwrap();
         assert_eq!(
