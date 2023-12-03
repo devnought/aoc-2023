@@ -14,10 +14,66 @@ fn main() -> anyhow::Result<()> {
     let res = part01()?;
     println!("Part 01: {res}");
 
+    let res = part02()?;
+    println!("Part 02: {res}");
+
     Ok(())
 }
 
 fn part01() -> anyhow::Result<u64> {
+    let ParsedData { symbols, values } = symbols_and_values()?;
+    let mut seen_values = HashSet::new();
+    let mut sum = 0;
+
+    for symbol in symbols {
+        for coords in symbol.adjacent_cells() {
+            if let Some(stored_value) = values.get(&coords) {
+                if seen_values.contains(&stored_value.id) {
+                    continue;
+                }
+
+                seen_values.insert(stored_value.id);
+
+                sum += stored_value.value;
+            }
+        }
+    }
+
+    Ok(sum)
+}
+
+fn part02() -> anyhow::Result<u64> {
+    let ParsedData { symbols, values } = symbols_and_values()?;
+    let iter = symbols.iter().filter(|symbol| symbol.0 == '*');
+    let mut sum = 0;
+
+    for symbol in iter {
+        let mut seen_values = HashMap::new();
+
+        for coords in symbol.adjacent_cells() {
+            if let Some(stored_value) = values.get(&coords) {
+                if seen_values.contains_key(&stored_value.id) {
+                    continue;
+                }
+
+                seen_values.insert(stored_value.id, stored_value.value);
+            }
+        }
+
+        if seen_values.len() == 2 {
+            sum += seen_values.values().product::<u64>();
+        }
+    }
+
+    Ok(sum)
+}
+
+struct ParsedData {
+    symbols: Vec<Symbol>,
+    values: HashMap<(i64, i64), StoredValue>,
+}
+
+fn symbols_and_values() -> anyhow::Result<ParsedData> {
     let file = File::open("day03.txt")?;
     let reader = BufReader::new(file);
 
@@ -45,24 +101,7 @@ fn part01() -> anyhow::Result<u64> {
         }
     }
 
-    let mut seen_values = HashSet::new();
-    let mut sum = 0;
-
-    for symbol in symbols {
-        for coords in symbol.adjacent_cells() {
-            if let Some(stored_value) = values.get(&coords) {
-                if seen_values.contains(&stored_value.id) {
-                    continue;
-                }
-
-                seen_values.insert(stored_value.id);
-
-                sum += stored_value.value;
-            }
-        }
-    }
-
-    Ok(sum)
+    Ok(ParsedData { symbols, values })
 }
 
 #[derive(Debug)]
@@ -75,15 +114,19 @@ struct StoredValue {
 struct Symbol(char, i64, i64);
 
 impl Symbol {
-    fn adjacent_cells(&self) -> [(i64, i64); 9] {
+    fn adjacent_cells(&self) -> [(i64, i64); 8] {
         let x = self.1;
         let y = self.2;
 
         let mut index = 0;
-        let mut positions = [(0, 0); 9];
+        let mut positions = [(0, 0); 8];
 
         for x_pos in (x - 1)..(x + 2) {
             for y_pos in (y - 1)..(y + 2) {
+                if x_pos == x && y_pos == y {
+                    continue;
+                }
+
                 positions[index] = (x_pos, y_pos);
                 index += 1;
             }
