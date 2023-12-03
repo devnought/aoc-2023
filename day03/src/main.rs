@@ -1,7 +1,7 @@
 use nom::{
     branch::alt,
     character::complete::{anychar, char, u64},
-    combinator::verify,
+    combinator::{map, verify},
     Finish, IResult,
 };
 use std::{
@@ -199,21 +199,16 @@ fn line(y: i64, input: &str) -> (Vec<DataValue>, Vec<Symbol>) {
 }
 
 fn symbol(input: &str) -> IResult<&str, DataRaw> {
-    let (input, s) = verify(anychar, |c| !c.is_alphanumeric() && *c != '.')(input)?;
-    let symbol = DataRaw::Symbol(s);
-    Ok((input, symbol))
+    let parser = verify(anychar, |c| !c.is_alphanumeric() && *c != '.');
+    map(parser, DataRaw::Symbol)(input)
 }
 
 fn blank(input: &str) -> IResult<&str, DataRaw> {
-    let (input, _) = char('.')(input)?;
-    let blank = DataRaw::Blank;
-    Ok((input, blank))
+    map(char('.'), |_| DataRaw::Blank)(input)
 }
 
 fn number(input: &str) -> IResult<&str, DataRaw> {
-    let (remaining, num) = u64(input)?;
-    let value = DataRaw::Value(num);
-    Ok((remaining, value))
+    map(u64, DataRaw::Value)(input)
 }
 
 fn data(input: &str) -> IResult<&str, DataRaw> {

@@ -77,7 +77,7 @@ fn valid_value(input: &str) -> IResult<&str, u8> {
 }
 
 fn digit_value(input: &str) -> IResult<&str, u8> {
-    let parser = verify(anychar, |c| c.is_digit(10));
+    let parser = verify(anychar, |c| c.is_ascii_digit());
     map(parser, |c| c.to_digit(10).unwrap() as u8)(input)
 }
 
