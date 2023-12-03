@@ -13,17 +13,50 @@ use std::{
 };
 
 fn main() -> anyhow::Result<()> {
-    let file = File::open("day02.txt")?;
-    let reader = BufReader::new(file);
+    let res = part01()?;
+    println!("Part 01: {res}");
 
-    for line in reader.lines() {
-        let line = line?;
-        let res = parser(&line);
-
-        println!("{res:?}");
-    }
+    let res = part02()?;
+    println!("Part 02: {res}");
 
     Ok(())
+}
+
+fn part01() -> anyhow::Result<u64> {
+    let file = File::open("day02.txt")?;
+    let reader = BufReader::new(file);
+    let sum = reader
+        .lines()
+        .map_while(Result::ok)
+        .filter_map(|line| parser(&line))
+        .filter_map(|game| {
+            let (red, green, blue) = game.max_cubes();
+
+            if red <= 12 && green <= 13 && blue <= 14 {
+                Some(game.id())
+            } else {
+                None
+            }
+        })
+        .sum();
+
+    Ok(sum)
+}
+
+fn part02() -> anyhow::Result<u64> {
+    let file = File::open("day02.txt")?;
+    let reader = BufReader::new(file);
+    let sum = reader
+        .lines()
+        .map_while(Result::ok)
+        .filter_map(|line| parser(&line))
+        .map(|game| {
+            let (red, green, blue) = game.max_cubes();
+            red * green * blue
+        })
+        .sum();
+
+    Ok(sum)
 }
 
 #[derive(Debug, PartialEq)]
@@ -39,11 +72,45 @@ struct Cube(u64, Colour);
 #[derive(Debug, PartialEq)]
 struct Game(u64, Vec<Vec<Cube>>);
 
-fn parser(input: &str) -> Vec<Game> {
-    game_records(input)
-        .finish()
-        .map(|(_, games)| games)
-        .unwrap_or_else(|_| Vec::new())
+impl Game {
+    fn id(&self) -> u64 {
+        self.0
+    }
+
+    fn max_cubes(&self) -> (u64, u64, u64) {
+        let mut red = 0;
+        let mut green = 0;
+        let mut blue = 0;
+
+        let cubes = self.1.iter().flatten();
+        for Cube(count, colour) in cubes {
+            let count = *count;
+
+            match colour {
+                Colour::Red => {
+                    if count > red {
+                        red = count;
+                    }
+                }
+                Colour::Green => {
+                    if count > green {
+                        green = count;
+                    }
+                }
+                Colour::Blue => {
+                    if count > blue {
+                        blue = count;
+                    }
+                }
+            }
+        }
+
+        (red, green, blue)
+    }
+}
+
+fn parser(input: &str) -> Option<Game> {
+    game_record(input).finish().map(|(_, game)| game).ok()
 }
 
 fn record_start(input: &str) -> IResult<&str, u64> {
@@ -62,11 +129,6 @@ fn record_start(input: &str) -> IResult<&str, u64> {
 fn game_record(input: &str) -> IResult<&str, Game> {
     let (input, (id, sets)) = tuple((record_start, cube_set_terminators))(input)?;
     Ok((input, Game(id, sets)))
-}
-
-fn game_records(input: &str) -> IResult<&str, Vec<Game>> {
-    let (input, games) = many0(game_record)(input)?;
-    Ok((input, games))
 }
 
 fn red(input: &str) -> IResult<&str, Colour> {
@@ -274,43 +336,6 @@ mod tests {
                         vec![Cube(2, Colour::Green)]
                     ]
                 )
-            )
-        )
-    }
-
-    #[test]
-    fn game_records_test() {
-        let input = r"
-
-  
-
-            Game 1: 3 blue, 4 red; 1 red, 2 green, 6 blue; 2 green
-            Game 2: 4 blue
-
-
-
-            
-        ";
-        let res = game_records(input).finish().unwrap();
-        assert_eq!(
-            res,
-            (
-                "",
-                vec![
-                    Game(
-                        1,
-                        vec![
-                            vec![Cube(3, Colour::Blue), Cube(4, Colour::Red)],
-                            vec![
-                                Cube(1, Colour::Red),
-                                Cube(2, Colour::Green),
-                                Cube(6, Colour::Blue)
-                            ],
-                            vec![Cube(2, Colour::Green)]
-                        ]
-                    ),
-                    Game(2, vec![vec![Cube(4, Colour::Blue)],])
-                ]
             )
         )
     }
