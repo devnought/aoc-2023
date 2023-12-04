@@ -68,7 +68,7 @@ fn part02() -> anyhow::Result<u64> {
     Ok(map.values().sum())
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct Card {
     id: u64,
     winning: HashSet<u64>,
