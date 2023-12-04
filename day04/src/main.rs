@@ -77,17 +77,10 @@ struct Card {
 
 impl Card {
     fn points(&self) -> u64 {
-        let mut value = 1;
-
-        self.numbers
-            .intersection(&self.winning)
-            .map(|_| {
-                let res = value;
-                value *= 2;
-                res
-            })
-            .last()
-            .unwrap_or(0)
+        match self.wins() {
+            0 => 0,
+            wins => 2u64.pow((wins - 1) as u32),
+        }
     }
 
     fn wins(&self) -> u64 {
