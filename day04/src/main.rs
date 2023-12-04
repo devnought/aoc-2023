@@ -125,6 +125,6 @@ fn numbers(input: &str) -> IResult<&str, HashSet<u64>> {
 }
 
 fn separator(input: &str) -> IResult<&str, ()> {
-    let parser = map(tuple((space0, char('|'), space0)), |_| ());
+    let parser = tuple((char('|'), space0));
     map(parser, |_| ())(input)
 }
