@@ -2,7 +2,7 @@ use nom::{
     branch::alt,
     bytes::complete::tag,
     character::complete::anychar,
-    combinator::{map, verify},
+    combinator::{map, value, verify},
     Finish, IResult,
 };
 use std::{
@@ -19,24 +19,16 @@ fn main() -> anyhow::Result<()> {
         .lines()
         .map_while(Result::ok)
         .map(|line| parser(&line))
-        .filter_map(|numbers| {
-            if numbers.is_empty() {
-                None
-            } else {
-                Some((
-                    *numbers.first().unwrap() as usize,
-                    *numbers.last().unwrap() as usize,
-                ))
-            }
-        })
-        .fold(0, |acc, (first, last)| acc + (first * 10) + last);
+        .filter_map(|numbers| Some((*numbers.first()?, *numbers.last()?)))
+        .map(|(first, last)| (first * 10) + last)
+        .sum::<u32>();
 
     println!("{sum}");
 
     Ok(())
 }
 
-fn parser(input: &str) -> Vec<u8> {
+fn parser(input: &str) -> Vec<u32> {
     let mut input = input;
     let mut output = Vec::new();
 
@@ -60,63 +52,23 @@ fn parser(input: &str) -> Vec<u8> {
     output
 }
 
-fn valid_value(input: &str) -> IResult<&str, u8> {
+fn valid_value(input: &str) -> IResult<&str, u32> {
     alt((
         digit_value,
-        zero_str,
-        one_str,
-        two_str,
-        three_str,
-        four_str,
-        five_str,
-        six_str,
-        seven_str,
-        eight_str,
-        nine_str,
+        value(0, tag("zero")),
+        value(1, tag("one")),
+        value(2, tag("two")),
+        value(3, tag("three")),
+        value(4, tag("four")),
+        value(5, tag("five")),
+        value(6, tag("six")),
+        value(7, tag("seven")),
+        value(8, tag("eight")),
+        value(9, tag("nine")),
     ))(input)
 }
 
-fn digit_value(input: &str) -> IResult<&str, u8> {
+fn digit_value(input: &str) -> IResult<&str, u32> {
     let parser = verify(anychar, |c| c.is_ascii_digit());
-    map(parser, |c| c.to_digit(10).unwrap() as u8)(input)
-}
-
-fn zero_str(input: &str) -> IResult<&str, u8> {
-    map(tag("zero"), |_| 0)(input)
-}
-
-fn one_str(input: &str) -> IResult<&str, u8> {
-    map(tag("one"), |_| 1)(input)
-}
-
-fn two_str(input: &str) -> IResult<&str, u8> {
-    map(tag("two"), |_| 2)(input)
-}
-
-fn three_str(input: &str) -> IResult<&str, u8> {
-    map(tag("three"), |_| 3)(input)
-}
-
-fn four_str(input: &str) -> IResult<&str, u8> {
-    map(tag("four"), |_| 4)(input)
-}
-
-fn five_str(input: &str) -> IResult<&str, u8> {
-    map(tag("five"), |_| 5)(input)
-}
-
-fn six_str(input: &str) -> IResult<&str, u8> {
-    map(tag("six"), |_| 6)(input)
-}
-
-fn seven_str(input: &str) -> IResult<&str, u8> {
-    map(tag("seven"), |_| 7)(input)
-}
-
-fn eight_str(input: &str) -> IResult<&str, u8> {
-    map(tag("eight"), |_| 8)(input)
-}
-
-fn nine_str(input: &str) -> IResult<&str, u8> {
-    map(tag("nine"), |_| 9)(input)
+    map(parser, |c| c.to_digit(10).unwrap())(input)
 }
