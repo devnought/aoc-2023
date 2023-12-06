@@ -1,7 +1,7 @@
 use nom::{
     branch::alt,
     bytes::complete::take_while1,
-    character::complete::{alpha0, char, line_ending, space0, u64},
+    character::complete::{alpha0, char, i64, line_ending, space0},
     combinator::{eof, map, value},
     multi::many0,
     sequence::tuple,
@@ -19,7 +19,7 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn part01() -> anyhow::Result<u64> {
+fn part01() -> anyhow::Result<i64> {
     let data_raw = fs::read_to_string("day06.txt")?;
     let data = parser_01(data_raw);
     let res = data.into_iter().map(|d| d.ways_to_win()).product();
@@ -27,7 +27,7 @@ fn part01() -> anyhow::Result<u64> {
     Ok(res)
 }
 
-fn part02() -> anyhow::Result<u64> {
+fn part02() -> anyhow::Result<i64> {
     let data_raw = fs::read_to_string("day06.txt")?;
     let data = parser_02(data_raw);
 
@@ -36,29 +36,29 @@ fn part02() -> anyhow::Result<u64> {
 
 #[derive(Debug)]
 struct TimeDistance {
-    time: u64,
-    distance: u64,
+    time: i64,
+    distance: i64,
 }
 
 impl TimeDistance {
-    fn new(time: u64, distance: u64) -> Self {
+    fn new(time: i64, distance: i64) -> Self {
         Self { time, distance }
     }
 
-    fn ways_to_win(&self) -> u64 {
-        (1..self.time)
-            .filter_map(|hold| {
-                let speed = hold;
-                let time = self.time - hold;
-                let distance = speed * time;
+    fn ways_to_win(&self) -> i64 {
+        let a = -1;
+        let b = self.time;
+        let c = -self.distance - 1;
 
-                if distance > self.distance {
-                    Some(distance)
-                } else {
-                    None
-                }
-            })
-            .count() as u64
+        let numerator_val = ((b.pow(2) - 4 * a * c) as f64).sqrt();
+        let divisor = 2.0 * a as f64;
+
+        let x0 = (-b as f64 + numerator_val) / divisor;
+        let x1 = (-b as f64 - numerator_val) / divisor;
+
+        let ret = (x0.ceil() - x1.floor()).abs() + 1.0;
+
+        ret as i64
     }
 }
 
@@ -81,11 +81,11 @@ fn parser_02(input: String) -> TimeDistance {
     TimeDistance::new(time, distance)
 }
 
-fn time_distance_parser(input: &str) -> IResult<&str, (Vec<u64>, Vec<u64>)> {
+fn time_distance_parser(input: &str) -> IResult<&str, (Vec<i64>, Vec<i64>)> {
     tuple((data_parser, data_parser))(input)
 }
 
-fn time_distance_parser_single(input: &str) -> IResult<&str, (u64, u64)> {
+fn time_distance_parser_single(input: &str) -> IResult<&str, (i64, i64)> {
     tuple((single_value_parser, single_value_parser))(input)
 }
 
@@ -97,8 +97,8 @@ fn line_end_or_eof(input: &str) -> IResult<&str, ()> {
     alt((value((), line_ending), value((), eof)))(input)
 }
 
-fn data_parser(input: &str) -> IResult<&str, Vec<u64>> {
-    let numbers = many0(map(tuple((u64, space0)), |(nums, _)| nums));
+fn data_parser(input: &str) -> IResult<&str, Vec<i64>> {
+    let numbers = many0(map(tuple((i64, space0)), |(nums, _)| nums));
     let parser = tuple((identifier, space0, numbers));
     let parser_nums = map(parser, |(_, _, nums)| nums);
 
@@ -116,7 +116,7 @@ fn single_value_parser_string(input: &str) -> IResult<&str, String> {
     map(parser, |(_, _, num_strs)| num_strs.join(""))(input)
 }
 
-fn single_value_parser(input: &str) -> IResult<&str, u64> {
+fn single_value_parser(input: &str) -> IResult<&str, i64> {
     let parser = tuple((single_value_parser_string, line_end_or_eof));
-    map(parser, |(val, _)| val.parse::<u64>().unwrap())(input)
+    map(parser, |(val, _)| val.parse::<i64>().unwrap())(input)
 }
