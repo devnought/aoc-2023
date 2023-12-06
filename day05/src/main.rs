@@ -66,14 +66,16 @@ impl SoilData {
     }
 
     fn map_seed(&self, seed: i64) -> i64 {
-        self.maps.iter().fold(seed, |value, section| {
+        let mut value = seed;
+
+        for section in &self.maps {
             let res = section.iter().filter_map(|m| m.mapped_value(value)).next();
             if let Some(v) = res {
-                v
-            } else {
-                value
+                value = v;
             }
-        })
+        }
+
+        value
     }
 
     fn seed_ranges(&self) -> Vec<Range<i64>> {
