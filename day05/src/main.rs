@@ -6,6 +6,7 @@ use nom::{
     sequence::tuple,
     Finish, IResult,
 };
+use rayon::prelude::*;
 use std::{
     fs::{self},
     ops::Range,
@@ -37,8 +38,8 @@ fn part02() -> anyhow::Result<i64> {
 
     let location = soil_data
         .seed_ranges()
-        .into_iter()
-        .map(|seeds| soil_data.location_from_range(seeds))
+        .par_iter()
+        .map(|seeds| soil_data.location_from_range(seeds.clone()))
         .min()
         .unwrap();
 
