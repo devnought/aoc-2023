@@ -79,15 +79,14 @@ impl SoilData {
     }
 
     fn seed_ranges(&self) -> Vec<Range<i64>> {
-        let len = self.seeds.len() / 2;
         let mut seeds_iter = self.seeds.iter();
 
-        (0..len)
-            .map(|_| {
-                let start = *seeds_iter.next().unwrap();
-                let length = *seeds_iter.next().unwrap();
+        (0..)
+            .map_while(|_| {
+                let start = *seeds_iter.next()?;
+                let length = *seeds_iter.next()?;
 
-                start..(start + length)
+                Some(start..(start + length))
             })
             .collect()
     }
