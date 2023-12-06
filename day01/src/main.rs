@@ -38,12 +38,8 @@ fn parser(input: &str) -> Vec<u32> {
         if let Ok((remaining_input, value)) = res {
             output.push(value);
 
-            if remaining_input.is_empty() {
-                input = "";
-            } else {
-                let start = max(1, input.len() - remaining_input.len() - 1);
-                input = &input[start..];
-            }
+            let start = max(1, input.len() - remaining_input.len() - 1);
+            input = &input[start..];
         } else {
             input = &input[1..];
         }
