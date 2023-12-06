@@ -119,7 +119,7 @@ fn card(input: &str) -> IResult<&str, Card> {
 }
 
 fn numbers(input: &str) -> IResult<&str, HashSet<u64>> {
-    let nums = map(tuple((u64, space0)), |(nums, _)| nums);
+    let nums = map(tuple((u64, space0)), |(num, _)| num);
     let parser = many0(nums);
     map(parser, |n| n.into_iter().collect::<HashSet<_>>())(input)
 }
