@@ -22,16 +22,27 @@ fn main() -> anyhow::Result<()> {
 }
 
 fn part01() -> anyhow::Result<i64> {
-    // let data = fs::read_to_string("sample.txt")?;
     let data = fs::read_to_string("day05.txt")?;
     let soil_data = parser(data)?;
-    let location = soil_data.smallest_location();
+
+    let seeds = &soil_data.seeds;
+    let location = soil_data.location_from_slice(seeds);
 
     Ok(location)
 }
 
 fn part02() -> anyhow::Result<i64> {
-    Ok(0)
+    let data = fs::read_to_string("day05.txt")?;
+    let soil_data = parser(data)?;
+
+    let location = soil_data
+        .seed_ranges()
+        .into_iter()
+        .map(|seeds| soil_data.location_from_range(seeds))
+        .min()
+        .unwrap();
+
+    Ok(location)
 }
 
 #[derive(Debug, Default)]
@@ -41,10 +52,14 @@ struct SoilData {
 }
 
 impl SoilData {
-    fn smallest_location(&self) -> i64 {
-        self.seeds
-            .iter()
-            .map(|seed| self.map_seed(*seed))
+    fn location_from_slice(&self, seeds: &[i64]) -> i64 {
+        seeds.iter().map(|seed| self.map_seed(*seed)).min().unwrap()
+    }
+
+    fn location_from_range(&self, seeds: Range<i64>) -> i64 {
+        seeds
+            .into_iter()
+            .map(|seed| self.map_seed(seed))
             .min()
             .unwrap()
     }
@@ -60,6 +75,20 @@ impl SoilData {
         }
 
         value
+    }
+
+    fn seed_ranges(&self) -> Vec<Range<i64>> {
+        let len = self.seeds.len() / 2;
+        let mut seeds_iter = self.seeds.iter();
+
+        (0..len)
+            .map(|_| {
+                let start = *seeds_iter.next().unwrap();
+                let length = *seeds_iter.next().unwrap();
+
+                start..(start + length)
+            })
+            .collect()
     }
 }
 
