@@ -1,3 +1,4 @@
+use core::panic;
 use nom::{
     branch::alt,
     character::complete::{anychar, char, space0, u64},
@@ -30,7 +31,7 @@ fn part01() -> anyhow::Result<u64> {
     let mut hands = reader
         .lines()
         .map_while(Result::ok)
-        .filter_map(|line| parser(&line))
+        .filter_map(|line| parser01(&line))
         .collect::<Vec<_>>();
     hands.sort();
 
@@ -46,8 +47,28 @@ fn part01() -> anyhow::Result<u64> {
     Ok(sum)
 }
 
-fn part02() -> anyhow::Result<i64> {
-    Ok(0)
+fn part02() -> anyhow::Result<u64> {
+    // let file = File::open("day07.txt")?;
+    let file = File::open("sample.txt")?;
+    let reader = BufReader::new(file);
+
+    let mut hands = reader
+        .lines()
+        .map_while(Result::ok)
+        .filter_map(|line| parser02(&line))
+        .collect::<Vec<_>>();
+    hands.sort();
+
+    let sum = hands
+        .iter()
+        .enumerate()
+        .map(|(index, hand)| {
+            let multiplier = (index + 1) as u64;
+            hand.bid * multiplier
+        })
+        .sum();
+
+    Ok(sum)
 }
 
 #[derive(Debug, Ord, PartialEq, PartialOrd, Eq)]
@@ -66,6 +87,19 @@ struct Hand {
     cards: [u8; 5],
     class: Class,
     bid: u64,
+}
+
+#[derive(Debug, Ord, PartialEq, PartialOrd, Eq)]
+struct CountCard(u8, u8);
+
+impl CountCard {
+    fn count(&self) -> u8 {
+        self.0
+    }
+
+    fn card(&self) -> u8 {
+        self.1
+    }
 }
 
 impl Ord for Hand {
@@ -96,55 +130,123 @@ impl PartialOrd for Hand {
 
 impl Hand {
     fn new(cards: [u8; 5], bid: u64) -> Self {
-        let mut map = HashMap::new();
-
-        for card in cards {
-            if let Some(c) = map.get_mut(&card) {
-                *c += 1;
-            } else {
-                map.insert(card, 1u8);
-            }
-        }
-
-        let mut counts = map.values().into_iter().collect::<Vec<_>>();
-        counts.sort();
-
-        let class = match counts.len() {
-            1 => Class::FiveOfAKind,
-            2 => match (counts[0], counts[1]) {
-                (1, 4) => Class::FourOfAKind,
-                (2, 3) => Class::FullHouse,
-                _ => panic!("impossible 2 count"),
-            },
-            3 => match (counts[0], counts[1], counts[2]) {
-                (1, 1, 3) => Class::ThreeOfAKind,
-                (1, 2, 2) => Class::TwoPair,
-                _ => panic!("impossible 3 count"),
-            },
-            4 => Class::OnePair,
-            5 => Class::HighCard,
-            _ => panic!("impossible out of range"),
-        };
+        let class = Self::classify_hand(&cards);
 
         Self { cards, class, bid }
     }
+
+    fn new_wildcard(cards: [u8; 5], bid: u64) -> Self {
+        let updated_cards = {
+            let mut cards = cards;
+
+            for card in &mut cards {
+                if *card == 11 {
+                    *card = 0;
+                }
+            }
+
+            cards
+        };
+
+        let class = Self::classify_hand(&updated_cards);
+        Self { cards, class, bid }
+    }
+
+    fn classify_hand(cards: &[u8; 5]) -> Class {
+        let counts = Self::card_counts(cards);
+
+        match counts.len() {
+            1 => Class::FiveOfAKind,
+            2 => match (counts[0].count(), counts[1].count()) {
+                (1, 4) => match counts[0].card() {
+                    0 => Class::FiveOfAKind,
+                    _ => Class::FourOfAKind,
+                },
+                (2, 3) => match counts[0].card() {
+                    0 => Class::FiveOfAKind,
+                    _ => Class::FullHouse,
+                },
+                _ => panic!("impossible 2 count"),
+            },
+            3 => match (counts[0].count(), counts[1].count(), counts[2].count()) {
+                (1, 1, 3) => match (counts[0].card(), counts[1].card()) {
+                    (0, _) => Class::FourOfAKind,
+                    (_, 0) => Class::FourOfAKind,
+                    _ => Class::ThreeOfAKind,
+                },
+                (1, 2, 2) => match (counts[0].card(), counts[1].card()) {
+                    (0, _) => Class::FullHouse,
+                    (_, 0) => match counts[1].count() {
+                        1 => Class::FullHouse,
+                        2 => Class::FourOfAKind,
+                        _ => panic!("impossible sub match"),
+                    },
+                    _ => Class::TwoPair,
+                },
+                _ => panic!("impossible 3 count"),
+            },
+            4 => match (counts[0].card(), counts[1].card(), counts[2].card()) {
+                (0, _, _) => Class::ThreeOfAKind,
+                (_, 0, _) => Class::ThreeOfAKind,
+                (_, _, 0) => Class::ThreeOfAKind,
+                _ => Class::OnePair,
+            },
+            5 => match (
+                counts[0].card(),
+                counts[1].card(),
+                counts[2].card(),
+                counts[3].count(),
+            ) {
+                (0, _, _, _) => Class::OnePair,
+                (_, 0, _, _) => Class::OnePair,
+                (_, _, 0, _) => Class::OnePair,
+                (_, _, _, 0) => Class::OnePair,
+                _ => Class::HighCard,
+            },
+            _ => panic!("impossible out of range"),
+        }
+    }
+
+    fn card_counts(cards: &[u8]) -> Vec<CountCard> {
+        let mut map = HashMap::new();
+
+        for card in cards {
+            if let Some(c) = map.get_mut(card) {
+                *c += 1;
+            } else {
+                map.insert(*card, 1u8);
+            }
+        }
+
+        let mut counts = map
+            .into_iter()
+            .map(|(card, count)| CountCard(count, card))
+            .collect::<Vec<_>>();
+        counts.sort();
+        counts
+    }
 }
 
-fn parser(input: &str) -> Option<Hand> {
-    let (_, hand_bid) = hand_bid(input).finish().ok()?;
-    Some(hand_bid)
+fn parser01(input: &str) -> Option<Hand> {
+    let (_, (hand, bid)) = hand_bid(input).finish().ok()?;
+    Some(Hand::new(hand, bid))
 }
 
-fn hand_bid(input: &str) -> IResult<&str, Hand> {
-    let parser = tuple((hand, space0, u64));
-    map(parser, |(hand, _, bid)| (Hand::new(hand, bid)))(input)
+fn parser02(input: &str) -> Option<Hand> {
+    let (_, (hand, bid)) = hand_bid(input).finish().ok()?;
+    Some(Hand::new_wildcard(hand, bid))
 }
 
-fn hand(input: &str) -> IResult<&str, [u8; 5]> {
+fn hand_bid(input: &str) -> IResult<&str, ([u8; 5], u64)> {
+    let parser = tuple((hand_raw, space0, u64));
+    map(parser, |(hand, _, bid)| (hand, bid))(input)
+}
+
+fn hand_raw(input: &str) -> IResult<&str, [u8; 5]> {
     let parser = many0(card);
     map(parser, |cards| {
         if cards.len() != 5 {
-            [0u8; 5]
+            panic!("impossible parsed hand");
         } else {
             [cards[0], cards[1], cards[2], cards[3], cards[4]]
         }
