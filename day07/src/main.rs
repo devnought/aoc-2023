@@ -15,8 +15,8 @@ use std::{
 };
 
 fn main() -> anyhow::Result<()> {
-    // let res = part01()?;
-    // println!("Part 01: {res}");
+    let res = part01()?;
+    println!("Part 01: {res}");
 
     let res = part02()?;
     println!("Part 02: {res}");
@@ -49,7 +49,6 @@ fn part01() -> anyhow::Result<u64> {
 
 fn part02() -> anyhow::Result<u64> {
     let file = File::open("day07.txt")?;
-    // let file = File::open("sample.txt")?;
     let reader = BufReader::new(file);
 
     let mut hands = reader
@@ -64,6 +63,7 @@ fn part02() -> anyhow::Result<u64> {
         .enumerate()
         .map(|(index, hand)| {
             let multiplier = (index + 1) as u64;
+
             hand.bid * multiplier
         })
         .sum();
@@ -134,19 +134,14 @@ impl Hand {
     }
 
     fn new_wildcard(cards: [u8; 5], bid: u64) -> Self {
-        let updated_cards = {
-            let mut cards = cards;
-
-            for card in &mut cards {
-                if *card == 11 {
-                    *card = 0;
-                }
+        let mut cards = cards;
+        for card in &mut cards {
+            if *card == 11 {
+                *card = 0;
             }
+        }
 
-            cards
-        };
-
-        let class = Self::classify_hand(&updated_cards);
+        let class = Self::classify_hand(&cards);
         Self { cards, class, bid }
     }
 
