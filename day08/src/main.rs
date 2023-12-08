@@ -1,63 +1,82 @@
 use anyhow::anyhow;
 use nom::{
     branch::alt,
-    character::complete::{alpha1, char, multispace0, space0},
+    character::complete::{alphanumeric1, char, multispace0, space0},
     combinator::{map, value},
     multi::many0,
     sequence::tuple,
     Finish, IResult,
 };
+use num::integer::lcm;
 use std::{
     collections::HashMap,
     fs::{self},
 };
 
 fn main() -> anyhow::Result<()> {
-    let res = part01()?;
+    let data = fs::read_to_string("day08.txt")?;
+    let map_data = parser(data)?;
+
+    let res = part01(&map_data);
     println!("Part 01: {res}");
 
-    // let res = part02()?;
-    // println!("Part 02: {res}");
+    let res = part02(&map_data);
+    println!("Part 02: {res}");
 
     Ok(())
 }
 
-fn part01() -> anyhow::Result<u64> {
-    let data = fs::read_to_string("day08.txt")?;
-    let MapData(directions, map) = parser(data)?;
+fn part01(map_data: &MapData) -> u64 {
+    let MapData(directions, map) = map_data;
+    let starts = ["AAA"];
 
-    let len = directions.len() as u64;
-    let mut count = 0;
-
-    let mut start = "AAA";
-    let mut destination = "";
-
-    while destination != "ZZZ" {
-        destination = directions.iter().fold(start, |location, direction| {
-            let entry = map.get(location).unwrap();
-
-            match direction {
-                Direction::Left => entry.left(),
-                Direction::Right => entry.right(),
-            }
-        });
-
-        count += len;
-        start = destination;
-    }
-
-    Ok(count)
+    solver(&starts, directions, map)
 }
 
-// fn part02() -> anyhow::Result<u64> {
-//     // let file = File::open("day08.txt")?;
-//     // let file = File::open("sample.txt")?;
-//     // let reader = BufReader::new(file);
+fn part02(map_data: &MapData) -> u64 {
+    let MapData(directions, map) = map_data;
+    let starts = &map
+        .keys()
+        .filter(|key| key.ends_with('A'))
+        .collect::<Vec<_>>();
 
-//     Ok(0)
-// }
+    solver(starts, directions, map)
+}
 
-#[derive(Debug)]
+fn solver<T>(starts: &[T], directions: &[Direction], map: &HashMap<String, Mapping>) -> u64
+where
+    T: AsRef<str>,
+{
+    let len = directions.len() as u64;
+
+    starts
+        .iter()
+        .map(|s| s.as_ref())
+        .map(|start| {
+            let mut start = start;
+            let mut count = 0;
+            let mut destination = "";
+
+            while !destination.ends_with('Z') {
+                destination = directions.iter().fold(start, |location, direction| {
+                    let entry = map.get(location).unwrap();
+
+                    match direction {
+                        Direction::Left => entry.left(),
+                        Direction::Right => entry.right(),
+                    }
+                });
+
+                count += len;
+                start = destination;
+            }
+
+            count
+        })
+        .fold(1, lcm)
+}
+
+#[derive(Debug, Clone)]
 struct Mapping(String, String);
 
 impl Mapping {
@@ -115,16 +134,16 @@ fn direction(input: &str) -> IResult<&str, Direction> {
 
 fn map_line(input: &str) -> IResult<&str, (String, Mapping)> {
     let parser = tuple((
-        alpha1,
+        alphanumeric1,
         space0,
         char('='),
         space0,
         char('('),
-        alpha1,
+        alphanumeric1,
         space0,
         char(','),
         space0,
-        alpha1,
+        alphanumeric1,
         space0,
         char(')'),
         multispace0,
