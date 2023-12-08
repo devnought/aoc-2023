@@ -15,8 +15,8 @@ use std::{
 };
 
 fn main() -> anyhow::Result<()> {
-    let res = part01()?;
-    println!("Part 01: {res}");
+    // let res = part01()?;
+    // println!("Part 01: {res}");
 
     let res = part02()?;
     println!("Part 02: {res}");
@@ -48,8 +48,8 @@ fn part01() -> anyhow::Result<u64> {
 }
 
 fn part02() -> anyhow::Result<u64> {
-    // let file = File::open("day07.txt")?;
-    let file = File::open("sample.txt")?;
+    let file = File::open("day07.txt")?;
+    // let file = File::open("sample.txt")?;
     let reader = BufReader::new(file);
 
     let mut hands = reader
@@ -105,19 +105,17 @@ impl CountCard {
 impl Ord for Hand {
     fn cmp(&self, other: &Self) -> Ordering {
         match self.class.cmp(&other.class) {
-            Ordering::Greater => Ordering::Greater,
-            Ordering::Less => Ordering::Less,
             Ordering::Equal => self
                 .cards
                 .iter()
                 .zip(other.cards.iter())
                 .filter_map(|(left, right)| match left.cmp(right) {
                     Ordering::Equal => None,
-                    Ordering::Greater => Some(Ordering::Greater),
-                    Ordering::Less => Some(Ordering::Less),
+                    ord => Some(ord),
                 })
                 .next()
                 .unwrap_or(Ordering::Equal),
+            ord => ord,
         }
     }
 }
@@ -154,53 +152,40 @@ impl Hand {
 
     fn classify_hand(cards: &[u8; 5]) -> Class {
         let counts = Self::card_counts(cards);
+        let has_wildcard = counts.iter().any(|c| c.card() == 0);
 
         match counts.len() {
             1 => Class::FiveOfAKind,
             2 => match (counts[0].count(), counts[1].count()) {
-                (1, 4) => match counts[0].card() {
-                    0 => Class::FiveOfAKind,
+                (1, 4) => match has_wildcard {
+                    true => Class::FiveOfAKind,
                     _ => Class::FourOfAKind,
                 },
-                (2, 3) => match counts[0].card() {
-                    0 => Class::FiveOfAKind,
+                (2, 3) => match has_wildcard {
+                    true => Class::FiveOfAKind,
                     _ => Class::FullHouse,
                 },
                 _ => panic!("impossible 2 count"),
             },
             3 => match (counts[0].count(), counts[1].count(), counts[2].count()) {
-                (1, 1, 3) => match (counts[0].card(), counts[1].card()) {
-                    (0, _) => Class::FourOfAKind,
-                    (_, 0) => Class::FourOfAKind,
+                (1, 1, 3) => match has_wildcard {
+                    true => Class::FourOfAKind,
                     _ => Class::ThreeOfAKind,
                 },
-                (1, 2, 2) => match (counts[0].card(), counts[1].card()) {
-                    (0, _) => Class::FullHouse,
-                    (_, 0) => match counts[1].count() {
-                        1 => Class::FullHouse,
-                        2 => Class::FourOfAKind,
-                        _ => panic!("impossible sub match"),
-                    },
+                (1, 2, 2) => match (counts[0].card(), counts[1].card(), counts[2].card()) {
+                    (0, _, _) => Class::FullHouse,
+                    (_, 0, _) => Class::FourOfAKind,
+                    (_, _, 0) => Class::FourOfAKind,
                     _ => Class::TwoPair,
                 },
                 _ => panic!("impossible 3 count"),
             },
-            4 => match (counts[0].card(), counts[1].card(), counts[2].card()) {
-                (0, _, _) => Class::ThreeOfAKind,
-                (_, 0, _) => Class::ThreeOfAKind,
-                (_, _, 0) => Class::ThreeOfAKind,
+            4 => match has_wildcard {
+                true => Class::ThreeOfAKind,
                 _ => Class::OnePair,
             },
-            5 => match (
-                counts[0].card(),
-                counts[1].card(),
-                counts[2].card(),
-                counts[3].count(),
-            ) {
-                (0, _, _, _) => Class::OnePair,
-                (_, 0, _, _) => Class::OnePair,
-                (_, _, 0, _) => Class::OnePair,
-                (_, _, _, 0) => Class::OnePair,
+            5 => match has_wildcard {
+                true => Class::OnePair,
                 _ => Class::HighCard,
             },
             _ => panic!("impossible out of range"),
@@ -270,4 +255,99 @@ fn face(input: &str) -> IResult<&str, u8> {
 fn digit(input: &str) -> IResult<&str, u8> {
     let parser = verify(anychar, |c| *c != '0' && *c != '1' && c.is_ascii_digit());
     map(parser, |c| c.to_digit(10).unwrap() as u8)(input)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn five_of_a_kind() {
+        let card = Hand::new_wildcard([2, 2, 2, 2, 2], 1);
+        assert_eq!(Class::FiveOfAKind, card.class);
+
+        let card = Hand::new_wildcard([2, 2, 2, 2, 11], 1);
+        assert_eq!(Class::FiveOfAKind, card.class);
+
+        let card = Hand::new_wildcard([2, 2, 2, 11, 11], 1);
+        assert_eq!(Class::FiveOfAKind, card.class);
+
+        let card = Hand::new_wildcard([2, 2, 11, 11, 11], 1);
+        assert_eq!(Class::FiveOfAKind, card.class);
+
+        let card = Hand::new_wildcard([2, 11, 11, 11, 11], 1);
+        assert_eq!(Class::FiveOfAKind, card.class);
+
+        let card = Hand::new_wildcard([11, 11, 11, 11, 11], 1);
+        assert_eq!(Class::FiveOfAKind, card.class);
+    }
+
+    #[test]
+    fn four_of_a_kind() {
+        let card = Hand::new_wildcard([4, 4, 4, 4, 2], 1);
+        assert_eq!(Class::FourOfAKind, card.class);
+
+        let card = Hand::new_wildcard([4, 4, 4, 11, 2], 1);
+        assert_eq!(Class::FourOfAKind, card.class);
+
+        let card = Hand::new_wildcard([4, 4, 11, 11, 2], 1);
+        assert_eq!(Class::FourOfAKind, card.class);
+
+        let card = Hand::new_wildcard([4, 11, 11, 11, 2], 1);
+        assert_eq!(Class::FourOfAKind, card.class);
+
+        let card = Hand::new_wildcard([3, 3, 11, 2, 11], 1);
+        assert_eq!(Class::FourOfAKind, card.class);
+    }
+
+    #[test]
+    fn full_house() {
+        let card = Hand::new_wildcard([3, 3, 3, 2, 2], 1);
+        assert_eq!(Class::FullHouse, card.class);
+
+        let card = Hand::new_wildcard([11, 3, 3, 2, 2], 1);
+        assert_eq!(Class::FullHouse, card.class);
+
+        let card = Hand::new_wildcard([3, 3, 11, 2, 2], 1);
+        assert_eq!(Class::FullHouse, card.class);
+    }
+
+    #[test]
+    fn three_of_a_kind() {
+        let card = Hand::new_wildcard([3, 3, 3, 2, 5], 1);
+        assert_eq!(Class::ThreeOfAKind, card.class);
+
+        let card = Hand::new_wildcard([11, 3, 3, 2, 5], 1);
+        assert_eq!(Class::ThreeOfAKind, card.class);
+
+        let card = Hand::new_wildcard([11, 11, 3, 2, 5], 1);
+        assert_eq!(Class::ThreeOfAKind, card.class);
+    }
+
+    #[test]
+    fn two_pair() {
+        let card = Hand::new_wildcard([2, 2, 3, 3, 4], 1);
+        assert_eq!(Class::TwoPair, card.class);
+
+        let card = Hand::new_wildcard([2, 3, 3, 5, 2], 1);
+        assert_eq!(Class::TwoPair, card.class);
+    }
+
+    #[test]
+    fn one_pair() {
+        let card = Hand::new_wildcard([2, 3, 4, 5, 5], 1);
+        assert_eq!(Class::OnePair, card.class);
+
+        let card = Hand::new_wildcard([2, 3, 4, 5, 11], 1);
+        assert_eq!(Class::OnePair, card.class);
+    }
+
+    #[test]
+    fn high_card() {
+        let card = Hand::new_wildcard([2, 3, 4, 5, 14], 1);
+        assert_eq!(Class::HighCard, card.class);
+
+        let card = Hand::new_wildcard([6, 3, 2, 8, 9], 1);
+        assert_eq!(Class::HighCard, card.class);
+    }
 }
