@@ -27,52 +27,48 @@ fn part02(_data: &Data) -> i64 {
 #[derive(Debug)]
 struct Data {
     start: Start,
-    corners: HashMap<Position, Corner>,
-    pipes: HashMap<Position, Pipe>,
+    elements: HashMap<Position, PipeCorner>,
 }
 
 impl Data {
-    fn new(
-        start: Position,
-        corners: HashMap<Position, Corner>,
-        pipes: HashMap<Position, Pipe>,
-    ) -> Self {
+    fn new(start: Position, elements: HashMap<Position, PipeCorner>) -> Self {
         Self {
-            start: Start(start),
-            corners,
-            pipes,
+            start: Start::new(start),
+            elements,
         }
     }
 
     fn path_distance(&self) -> i64 {
         let start_adjacencies = self.start.adjacencies();
-        let adjacent_pipe = start_adjacencies
-            .iter()
+        let (mut element, mut connection) = start_adjacencies
+            .into_iter()
             .filter_map(|connection| {
-                let pipe = self.pipes.get(&connection.position)?;
+                let element = self.elements.get(&connection.position)?;
 
-                if pipe.orientation == connection.orientation {
-                    Some(*pipe)
+                if element.valid_orientation(connection.orientation) {
+                    Some((*element, connection))
                 } else {
                     None
                 }
             })
-            .next();
+            .next()
+            .expect("No adjacent to start?");
 
-        let adjacent_corner = start_adjacencies
-            .iter()
-            .filter_map(|connection| {
-                let corner = self.corners.get(&connection.position)?;
+        let mut distance = 0;
 
-                if corner.valid_connection(*connection) {
-                    Some(*corner)
-                } else {
-                    None
-                }
-            })
-            .next();
+        while element.position() != self.start.position {
+            distance += element.len();
 
-        0
+            println!("Current element: {element:?}");
+            let next_connection = element.next_connection(connection);
+
+            println!("Next position:   {:?}", next_connection.position);
+
+            element = *self.elements.get(&next_connection.position).unwrap();
+            connection = next_connection;
+        }
+
+        distance
     }
 }
 
@@ -81,8 +77,7 @@ fn parser(data: String) -> Data {
     let mut columns_raw = (0..width).map(|_| String::new()).collect::<Vec<_>>();
 
     let mut start_position = Position::new(-1, -1);
-    let mut corner_map = HashMap::new();
-    let mut pipe_map = HashMap::new();
+    let mut elements = HashMap::new();
 
     // Parse each row, and build up the data for each column.
     // Pull the start position, corners, and horizontal pipes.
@@ -99,28 +94,28 @@ fn parser(data: String) -> Data {
 
         for pipe in pipes {
             let reverse_pipe = pipe.reverse();
-            pipe_map.insert(pipe.start, pipe);
-            pipe_map.insert(reverse_pipe.start, reverse_pipe);
+            elements.insert(pipe.start, PipeCorner::Pipe(pipe));
+            elements.insert(reverse_pipe.start, PipeCorner::Pipe(reverse_pipe));
         }
 
         for corner in corners {
-            corner_map.insert(corner.position(), corner);
+            elements.insert(corner.position(), PipeCorner::Corner(corner));
         }
     }
 
     // Parse each constructed column for vertical pipes.
     // All other relevant data was pulled from the row parsing.
-    for (x, column) in columns_raw.iter().enumerate().take(1) {
+    for (x, column) in columns_raw.iter().enumerate() {
         let pipes = parse_column(x as i64, &column);
 
         for pipe in pipes {
             let reverse_pipe = pipe.reverse();
-            pipe_map.insert(pipe.start, pipe);
-            pipe_map.insert(reverse_pipe.start, reverse_pipe);
+            elements.insert(pipe.start, PipeCorner::Pipe(pipe));
+            elements.insert(reverse_pipe.start, PipeCorner::Pipe(reverse_pipe));
         }
     }
 
-    Data::new(start_position, corner_map, pipe_map)
+    Data::new(start_position, elements)
 }
 
 fn parse_row(y: i64, line: &str) -> (Option<Position>, Vec<Pipe>, Vec<Corner>) {
@@ -163,7 +158,6 @@ fn parse_column(x: i64, line: &str) -> Vec<Pipe> {
     let mut line = line;
 
     let mut pipes = Vec::new();
-
     let mut y = 0;
 
     while !line.is_empty() {
@@ -186,12 +180,54 @@ fn parse_column(x: i64, line: &str) -> Vec<Pipe> {
     pipes
 }
 
-#[derive(Debug)]
-struct Start(Position);
+#[derive(Debug, Clone, Copy)]
+enum PipeCorner {
+    Pipe(Pipe),
+    Corner(Corner),
+}
+
+impl PipeCorner {
+    fn position(&self) -> Position {
+        match self {
+            Self::Pipe(p) => p.start,
+            Self::Corner(c) => c.position(),
+        }
+    }
+
+    fn next_connection(&self, connection: Connection) -> Connection {
+        match self {
+            Self::Pipe(p) => p.end_connection(),
+            Self::Corner(c) => c.output_connection(connection),
+        }
+    }
+
+    fn valid_orientation(&self, orientation: Orientation) -> bool {
+        match self {
+            Self::Pipe(p) => p.orientation == orientation,
+            Self::Corner(c) => c.valid_orientation(orientation),
+        }
+    }
+
+    fn len(&self) -> i64 {
+        match self {
+            Self::Pipe(p) => p.len(),
+            Self::Corner(_) => 1,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct Start {
+    position: Position,
+}
 
 impl Start {
+    fn new(position: Position) -> Self {
+        Self { position }
+    }
+
     fn adjacencies(&self) -> [Connection; 4] {
-        let p = self.0;
+        let p = self.position;
 
         [
             Connection::new(Position::new(p.x + 1, p.y), Orientation::Horizontal),
@@ -240,7 +276,7 @@ impl Pipe {
         Self::new(self.end, self.start, self.orientation)
     }
 
-    fn length(&self) -> i64 {
+    fn len(&self) -> i64 {
         match self.orientation {
             Orientation::Horizontal => (self.start.x - self.end.x).abs(),
             Orientation::Vertical => (self.start.y - self.end.y).abs(),
@@ -316,10 +352,28 @@ impl Corner {
         }
     }
 
+    fn valid_orientation(&self, orientation: Orientation) -> bool {
+        let (one, two) = self.connections();
+
+        orientation == one.orientation || orientation == two.orientation
+    }
+
     fn valid_connection(&self, connection: Connection) -> bool {
         let (one, two) = self.connections();
 
         connection == one || connection == two
+    }
+
+    fn output_connection(&self, connection: Connection) -> Connection {
+        let (one, two) = self.connections();
+
+        if connection == one {
+            two
+        } else if connection == two {
+            one
+        } else {
+            panic!("No matching connection for {connection:?}");
+        }
     }
 }
 
@@ -403,8 +457,25 @@ mod tests {
         );
 
         let data = parser(raw);
+
+        for element in data.elements.values() {
+            match element {
+                PipeCorner::Pipe(p) => {
+                    let start = p.start;
+                    let end = p.end;
+
+                    println!("Pipe:   ({},{}) -> ({},{})", start.x, start.y, end.x, end.y);
+                }
+                PipeCorner::Corner(c) => {
+                    let position = c.position();
+                    println!("Corner: ({},{})", position.x, position.y);
+                }
+                _ => {}
+            }
+        }
+
         let path_distance = data.path_distance();
 
-        assert_eq!(false, true);
+        assert_eq!(8, path_distance);
     }
 }
