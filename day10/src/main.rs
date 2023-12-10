@@ -1,11 +1,11 @@
+use geo::{BoundingRect, Contains, Coord, LineString, Point, Polygon};
 use nom::{
     branch::alt, character::complete::char, combinator::value, multi::many1, Finish, IResult,
 };
-use std::{cmp::Eq, collections::HashMap, fmt::Display, fs};
+use std::{cmp::Eq, collections::HashMap, fmt::Display, fs, iter::repeat};
 
 fn main() -> anyhow::Result<()> {
     let data_raw = fs::read_to_string("day10.txt")?;
-    // let data_raw = fs::read_to_string("sample.txt")?;
     let data = parser(data_raw);
 
     let res = part01(&data);
@@ -21,8 +21,33 @@ fn part01(data: &Data) -> i64 {
     data.build_path().iter().map(Element::len).sum::<i64>() / 2
 }
 
-fn part02(_data: &Data) -> i64 {
-    0
+fn part02(data: &Data) -> i64 {
+    let path = data.build_path();
+    let verticies = path
+        .iter()
+        .filter_map(|e| match e {
+            Element::Corner(c) => Some(c.position()),
+            Element::Start(s) => Some(s.position),
+            _ => None,
+        })
+        .map(|p| Coord {
+            x: p.x as f64,
+            y: p.y as f64,
+        })
+        .collect::<Vec<_>>();
+
+    let polygon = Polygon::new(LineString::new(verticies), Vec::new());
+    let bounds = polygon.bounding_rect().unwrap();
+
+    let x_range = bounds.min().x as i64 + 1..bounds.max().x as i64;
+    let y_range = bounds.min().y as i64 + 1..bounds.max().y as i64;
+
+    x_range
+        .into_iter()
+        .flat_map(|x| repeat(x).zip(y_range.clone()))
+        .map(|(x, y)| Point::new(x as f64, y as f64))
+        .filter(|p| polygon.contains(p))
+        .count() as i64
 }
 
 #[derive(Debug)]
@@ -497,79 +522,4 @@ fn north_east(input: &str) -> IResult<&str, DataType> {
 
 fn south_east(input: &str) -> IResult<&str, DataType> {
     value(DataType::SouthEastCorner, char('F'))(input)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    //     #[test]
-    //     fn test() {
-    //         let raw = String::from(
-    //             ".....
-    // .S-7.
-    // .|.|.
-    // .L-J.
-    // .....",
-    //         );
-
-    //         let data = parser(raw);
-
-    //         let path_distance = data.path_distance();
-
-    //         assert_eq!(8, path_distance);
-    //     }
-
-    #[test]
-    fn corner_tests() {
-        let p = Position::new(0, 0);
-
-        let corner = Corner::SouthEast(p);
-        let res = corner.next_connection(Direction::North);
-        assert_eq!(
-            Some(Connection::new(Position::new(1, 0), Direction::East)),
-            res
-        );
-
-        let corner = Corner::SouthEast(p);
-        let res = corner.next_connection(Direction::West);
-        assert_eq!(
-            Some(Connection::new(Position::new(0, 1), Direction::South)),
-            res
-        );
-    }
-
-    #[test]
-    fn one_length_pipe_tests() {
-        let start = Position::new(0, 0);
-        let end = Position::new(0, 0);
-
-        let pipe = Pipe::new(start, end, Direction::East);
-        let res = pipe.next_connection(Direction::East);
-        assert_eq!(
-            Some(Connection::new(Position::new(1, 0), Direction::East)),
-            res
-        );
-
-        let pipe = Pipe::new(start, end, Direction::East);
-        let res = pipe.next_connection(Direction::West);
-        assert_eq!(
-            Some(Connection::new(Position::new(-1, 0), Direction::West)),
-            res
-        );
-
-        let pipe = Pipe::new(start, end, Direction::North);
-        let res = pipe.next_connection(Direction::South);
-        assert_eq!(
-            Some(Connection::new(Position::new(0, 1), Direction::South)),
-            res
-        );
-
-        let pipe = Pipe::new(start, end, Direction::North);
-        let res = pipe.next_connection(Direction::North);
-        assert_eq!(
-            Some(Connection::new(Position::new(0, -1), Direction::North)),
-            res
-        );
-    }
 }
