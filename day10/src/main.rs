@@ -1,10 +1,11 @@
 use nom::{
     branch::alt, character::complete::char, combinator::value, multi::many1, Finish, IResult,
 };
-use std::{cmp::Eq, collections::HashMap, fs};
+use std::{cmp::Eq, collections::HashMap, fmt::Display, fs};
 
 fn main() -> anyhow::Result<()> {
     let data_raw = fs::read_to_string("day10.txt")?;
+    // let data_raw = fs::read_to_string("sample.txt")?;
     let data = parser(data_raw);
 
     let res = part01(&data);
@@ -16,8 +17,8 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn part01(_data: &Data) -> i64 {
-    0
+fn part01(data: &Data) -> i64 {
+    data.build_path().iter().map(Element::len).sum::<i64>() / 2
 }
 
 fn part02(_data: &Data) -> i64 {
@@ -27,48 +28,43 @@ fn part02(_data: &Data) -> i64 {
 #[derive(Debug)]
 struct Data {
     start: Start,
-    elements: HashMap<Position, PipeCorner>,
+    elements: HashMap<Position, Element>,
 }
 
 impl Data {
-    fn new(start: Position, elements: HashMap<Position, PipeCorner>) -> Self {
+    fn new(start: Position, elements: HashMap<Position, Element>) -> Self {
         Self {
             start: Start::new(start),
             elements,
         }
     }
 
-    fn path_distance(&self) -> i64 {
+    fn build_path(&self) -> Vec<Element> {
         let start_adjacencies = self.start.adjacencies();
         let (mut element, mut connection) = start_adjacencies
             .into_iter()
             .filter_map(|connection| {
                 let element = self.elements.get(&connection.position)?;
-
-                if element.valid_orientation(connection.orientation) {
-                    Some((*element, connection))
-                } else {
-                    None
-                }
+                element.next_connection(connection.direction)?;
+                Some((element, connection))
             })
             .next()
             .expect("No adjacent to start?");
 
-        let mut distance = 0;
+        let mut parts = vec![Element::Start(self.start), *element];
 
-        while element.position() != self.start.position {
-            distance += element.len();
+        loop {
+            connection = element.next_connection(connection.direction).unwrap();
 
-            println!("Current element: {element:?}");
-            let next_connection = element.next_connection(connection);
+            if connection.position == self.start.position {
+                break;
+            }
 
-            println!("Next position:   {:?}", next_connection.position);
-
-            element = *self.elements.get(&next_connection.position).unwrap();
-            connection = next_connection;
+            element = self.elements.get(&connection.position).unwrap();
+            parts.push(*element);
         }
 
-        distance
+        parts
     }
 }
 
@@ -93,25 +89,21 @@ fn parser(data: String) -> Data {
         }
 
         for pipe in pipes {
-            let reverse_pipe = pipe.reverse();
-            elements.insert(pipe.start, PipeCorner::Pipe(pipe));
-            elements.insert(reverse_pipe.start, PipeCorner::Pipe(reverse_pipe));
+            elements.insert(pipe.start, Element::Pipe(pipe));
         }
 
         for corner in corners {
-            elements.insert(corner.position(), PipeCorner::Corner(corner));
+            elements.insert(corner.position(), Element::Corner(corner));
         }
     }
 
     // Parse each constructed column for vertical pipes.
     // All other relevant data was pulled from the row parsing.
     for (x, column) in columns_raw.iter().enumerate() {
-        let pipes = parse_column(x as i64, &column);
+        let pipes = parse_column(x as i64, column);
 
         for pipe in pipes {
-            let reverse_pipe = pipe.reverse();
-            elements.insert(pipe.start, PipeCorner::Pipe(pipe));
-            elements.insert(reverse_pipe.start, PipeCorner::Pipe(reverse_pipe));
+            elements.insert(pipe.start, Element::Pipe(pipe));
         }
     }
 
@@ -138,7 +130,12 @@ fn parse_row(y: i64, line: &str) -> (Option<Position>, Vec<Pipe>, Vec<Corner>) {
 
         match data_type {
             DataType::Start => start_position = Some(start),
-            DataType::Horizontal => pipes.push(Pipe::new(start, end, Orientation::Horizontal)),
+            DataType::Horizontal => {
+                let east_west = Pipe::new(start, end, Direction::East);
+                let west_east = Pipe::new(end, start, Direction::West);
+                pipes.push(east_west);
+                pipes.push(west_east);
+            }
             DataType::SouthWestCorner => corners.push(Corner::SouthWest(start)),
             DataType::NorthWestCorner => corners.push(Corner::NorthWest(start)),
             DataType::NorthEastCorner => corners.push(Corner::NorthEast(start)),
@@ -168,9 +165,11 @@ fn parse_column(x: i64, line: &str) -> Vec<Pipe> {
         let start = Position::new(x, y);
         let end = Position::new(x, y + len - 1);
 
-        match data_type {
-            DataType::Vertical => pipes.push(Pipe::new(start, end, Orientation::Vertical)),
-            _ => {}
+        if let DataType::Vertical = data_type {
+            let north_south = Pipe::new(start, end, Direction::South);
+            let south_north = Pipe::new(end, start, Direction::North);
+            pipes.push(north_south);
+            pipes.push(south_north);
         }
 
         line = r;
@@ -181,30 +180,18 @@ fn parse_column(x: i64, line: &str) -> Vec<Pipe> {
 }
 
 #[derive(Debug, Clone, Copy)]
-enum PipeCorner {
+enum Element {
     Pipe(Pipe),
     Corner(Corner),
+    Start(Start),
 }
 
-impl PipeCorner {
-    fn position(&self) -> Position {
+impl Element {
+    fn next_connection(&self, direction: Direction) -> Option<Connection> {
         match self {
-            Self::Pipe(p) => p.start,
-            Self::Corner(c) => c.position(),
-        }
-    }
-
-    fn next_connection(&self, connection: Connection) -> Connection {
-        match self {
-            Self::Pipe(p) => p.end_connection(),
-            Self::Corner(c) => c.output_connection(connection),
-        }
-    }
-
-    fn valid_orientation(&self, orientation: Orientation) -> bool {
-        match self {
-            Self::Pipe(p) => p.orientation == orientation,
-            Self::Corner(c) => c.valid_orientation(orientation),
+            Self::Pipe(p) => p.next_connection(direction),
+            Self::Corner(c) => c.next_connection(direction),
+            Self::Start(_) => None,
         }
     }
 
@@ -212,6 +199,17 @@ impl PipeCorner {
         match self {
             Self::Pipe(p) => p.len(),
             Self::Corner(_) => 1,
+            Self::Start(_) => 1,
+        }
+    }
+}
+
+impl Display for Element {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Pipe(p) => p.fmt(f),
+            Self::Corner(c) => c.fmt(f),
+            Self::Start(s) => s.fmt(f),
         }
     }
 }
@@ -230,11 +228,17 @@ impl Start {
         let p = self.position;
 
         [
-            Connection::new(Position::new(p.x + 1, p.y), Orientation::Horizontal),
-            Connection::new(Position::new(p.x - 1, p.y), Orientation::Horizontal),
-            Connection::new(Position::new(p.x, p.y + 1), Orientation::Vertical),
-            Connection::new(Position::new(p.x, p.y - 1), Orientation::Vertical),
+            Connection::new(Position::new(p.x + 1, p.y), Direction::East),
+            Connection::new(Position::new(p.x - 1, p.y), Direction::West),
+            Connection::new(Position::new(p.x, p.y + 1), Direction::North),
+            Connection::new(Position::new(p.x, p.y - 1), Direction::South),
         ]
+    }
+}
+
+impl Display for Start {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "S")
     }
 }
 
@@ -251,64 +255,102 @@ impl Position {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-enum Orientation {
-    Horizontal,
-    Vertical,
+enum Direction {
+    North,
+    South,
+    East,
+    West,
+}
+
+impl Direction {
+    fn is_horizontal(&self) -> bool {
+        self == &Self::East || self == &Self::West
+    }
+
+    fn is_vertical(&self) -> bool {
+        self == &Self::North || self == &Self::South
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
 struct Pipe {
     start: Position,
     end: Position,
-    orientation: Orientation,
+    direction: Direction,
 }
 
 impl Pipe {
-    fn new(start: Position, end: Position, orientation: Orientation) -> Self {
+    fn new(start: Position, end: Position, direction: Direction) -> Self {
         Self {
             start,
             end,
-            orientation,
+            direction,
         }
-    }
-
-    fn reverse(&self) -> Self {
-        Self::new(self.end, self.start, self.orientation)
     }
 
     fn len(&self) -> i64 {
-        match self.orientation {
-            Orientation::Horizontal => (self.start.x - self.end.x).abs(),
-            Orientation::Vertical => (self.start.y - self.end.y).abs(),
+        match self.direction {
+            Direction::North | Direction::South => (self.start.y - self.end.y).abs() + 1,
+            Direction::East | Direction::West => (self.start.x - self.end.x).abs() + 1,
         }
     }
 
-    fn end_connection(&self) -> Connection {
-        match self.orientation {
-            Orientation::Horizontal => {
-                let end = self.end;
-                let range = self.start.x..end.x + 1;
+    fn next_connection(&self, direction: Direction) -> Option<Connection> {
+        let dirs = (self.direction, direction);
+        let test = (
+            self.direction.is_horizontal() && direction.is_horizontal(),
+            self.direction.is_vertical() && direction.is_vertical(),
+        );
 
-                let x = if range.contains(&(end.x + 1)) {
-                    end.x - 1
-                } else {
-                    end.x + 1
-                };
+        match test {
+            (true, false) => match dirs {
+                (Direction::East, Direction::East) => Some(Connection::new(
+                    Position::new(self.end.x + 1, self.end.y),
+                    Direction::East,
+                )),
+                (Direction::West, Direction::West) => Some(Connection::new(
+                    Position::new(self.end.x - 1, self.end.y),
+                    Direction::West,
+                )),
+                (Direction::East, Direction::West) => Some(Connection::new(
+                    Position::new(self.start.x - 1, self.start.y),
+                    Direction::West,
+                )),
+                (Direction::West, Direction::East) => Some(Connection::new(
+                    Position::new(self.start.x + 1, self.start.y),
+                    Direction::East,
+                )),
+                _ => None,
+            },
+            (false, true) => match dirs {
+                (Direction::North, Direction::North) => Some(Connection::new(
+                    Position::new(self.end.x, self.end.y - 1),
+                    Direction::North,
+                )),
+                (Direction::South, Direction::South) => Some(Connection::new(
+                    Position::new(self.end.x, self.end.y + 1),
+                    Direction::South,
+                )),
+                (Direction::North, Direction::South) => Some(Connection::new(
+                    Position::new(self.start.x, self.start.y + 1),
+                    Direction::South,
+                )),
+                (Direction::South, Direction::North) => Some(Connection::new(
+                    Position::new(self.start.x, self.start.y - 1),
+                    Direction::North,
+                )),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+}
 
-                Connection::new(Position::new(x, end.y), self.orientation)
-            }
-            Orientation::Vertical => {
-                let end = self.end;
-                let range = self.start.y..end.y + 1;
-
-                let y = if range.contains(&(end.y + 1)) {
-                    end.y - 1
-                } else {
-                    end.y + 1
-                };
-
-                Connection::new(Position::new(end.x, y), self.orientation)
-            }
+impl Display for Pipe {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.direction {
+            Direction::North | Direction::South => write!(f, "|"),
+            _ => write!(f, "-"),
         }
     }
 }
@@ -331,48 +373,63 @@ impl Corner {
         }
     }
 
-    fn connections(&self) -> (Connection, Connection) {
+    fn next_connection(&self, direction: Direction) -> Option<Connection> {
         match self {
-            Self::SouthWest(p) => (
-                Connection::new(Position::new(p.x - 1, p.y), Orientation::Horizontal),
-                Connection::new(Position::new(p.x, p.y + 1), Orientation::Vertical),
-            ),
-            Self::NorthWest(p) => (
-                Connection::new(Position::new(p.x, p.y - 1), Orientation::Vertical),
-                Connection::new(Position::new(p.x - 1, p.y), Orientation::Horizontal),
-            ),
-            Self::NorthEast(p) => (
-                Connection::new(Position::new(p.x + 1, p.y), Orientation::Horizontal),
-                Connection::new(Position::new(p.x, p.y - 1), Orientation::Vertical),
-            ),
-            Self::SouthEast(p) => (
-                Connection::new(Position::new(p.x, p.y - 1), Orientation::Vertical),
-                Connection::new(Position::new(p.x + 1, p.y), Orientation::Horizontal),
-            ),
+            Self::SouthWest(p) => match direction {
+                Direction::East => Some(Connection::new(
+                    Position::new(p.x, p.y + 1),
+                    Direction::South,
+                )),
+                Direction::North => Some(Connection::new(
+                    Position::new(p.x - 1, p.y),
+                    Direction::West,
+                )),
+                _ => None,
+            },
+            Self::NorthWest(p) => match direction {
+                Direction::South => Some(Connection::new(
+                    Position::new(p.x - 1, p.y),
+                    Direction::West,
+                )),
+                Direction::East => Some(Connection::new(
+                    Position::new(p.x, p.y - 1),
+                    Direction::North,
+                )),
+                _ => None,
+            },
+            Self::NorthEast(p) => match direction {
+                Direction::West => Some(Connection::new(
+                    Position::new(p.x, p.y - 1),
+                    Direction::North,
+                )),
+                Direction::South => Some(Connection::new(
+                    Position::new(p.x + 1, p.y),
+                    Direction::East,
+                )),
+                _ => None,
+            },
+            Self::SouthEast(p) => match direction {
+                Direction::North => Some(Connection::new(
+                    Position::new(p.x + 1, p.y),
+                    Direction::East,
+                )),
+                Direction::West => Some(Connection::new(
+                    Position::new(p.x, p.y + 1),
+                    Direction::South,
+                )),
+                _ => None,
+            },
         }
     }
+}
 
-    fn valid_orientation(&self, orientation: Orientation) -> bool {
-        let (one, two) = self.connections();
-
-        orientation == one.orientation || orientation == two.orientation
-    }
-
-    fn valid_connection(&self, connection: Connection) -> bool {
-        let (one, two) = self.connections();
-
-        connection == one || connection == two
-    }
-
-    fn output_connection(&self, connection: Connection) -> Connection {
-        let (one, two) = self.connections();
-
-        if connection == one {
-            two
-        } else if connection == two {
-            one
-        } else {
-            panic!("No matching connection for {connection:?}");
+impl Display for Corner {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::SouthWest(_) => write!(f, "7"),
+            Self::NorthWest(_) => write!(f, "J"),
+            Self::NorthEast(_) => write!(f, "L"),
+            Self::SouthEast(_) => write!(f, "F"),
         }
     }
 }
@@ -380,14 +437,14 @@ impl Corner {
 #[derive(Debug, PartialEq, Clone, Copy)]
 struct Connection {
     position: Position,
-    orientation: Orientation,
+    direction: Direction,
 }
 
 impl Connection {
-    fn new(position: Position, orientation: Orientation) -> Self {
+    fn new(position: Position, direction: Direction) -> Self {
         Self {
             position,
-            orientation,
+            direction,
         }
     }
 }
@@ -446,36 +503,73 @@ fn south_east(input: &str) -> IResult<&str, DataType> {
 mod tests {
     use super::*;
 
+    //     #[test]
+    //     fn test() {
+    //         let raw = String::from(
+    //             ".....
+    // .S-7.
+    // .|.|.
+    // .L-J.
+    // .....",
+    //         );
+
+    //         let data = parser(raw);
+
+    //         let path_distance = data.path_distance();
+
+    //         assert_eq!(8, path_distance);
+    //     }
+
     #[test]
-    fn test() {
-        let raw = String::from(
-            ".....
-.S-7.
-.|.|.
-.L-J.
-.....",
+    fn corner_tests() {
+        let p = Position::new(0, 0);
+
+        let corner = Corner::SouthEast(p);
+        let res = corner.next_connection(Direction::North);
+        assert_eq!(
+            Some(Connection::new(Position::new(1, 0), Direction::East)),
+            res
         );
 
-        let data = parser(raw);
+        let corner = Corner::SouthEast(p);
+        let res = corner.next_connection(Direction::West);
+        assert_eq!(
+            Some(Connection::new(Position::new(0, 1), Direction::South)),
+            res
+        );
+    }
 
-        for element in data.elements.values() {
-            match element {
-                PipeCorner::Pipe(p) => {
-                    let start = p.start;
-                    let end = p.end;
+    #[test]
+    fn one_length_pipe_tests() {
+        let start = Position::new(0, 0);
+        let end = Position::new(0, 0);
 
-                    println!("Pipe:   ({},{}) -> ({},{})", start.x, start.y, end.x, end.y);
-                }
-                PipeCorner::Corner(c) => {
-                    let position = c.position();
-                    println!("Corner: ({},{})", position.x, position.y);
-                }
-                _ => {}
-            }
-        }
+        let pipe = Pipe::new(start, end, Direction::East);
+        let res = pipe.next_connection(Direction::East);
+        assert_eq!(
+            Some(Connection::new(Position::new(1, 0), Direction::East)),
+            res
+        );
 
-        let path_distance = data.path_distance();
+        let pipe = Pipe::new(start, end, Direction::East);
+        let res = pipe.next_connection(Direction::West);
+        assert_eq!(
+            Some(Connection::new(Position::new(-1, 0), Direction::West)),
+            res
+        );
 
-        assert_eq!(8, path_distance);
+        let pipe = Pipe::new(start, end, Direction::North);
+        let res = pipe.next_connection(Direction::South);
+        assert_eq!(
+            Some(Connection::new(Position::new(0, 1), Direction::South)),
+            res
+        );
+
+        let pipe = Pipe::new(start, end, Direction::North);
+        let res = pipe.next_connection(Direction::North);
+        assert_eq!(
+            Some(Connection::new(Position::new(0, -1), Direction::North)),
+            res
+        );
     }
 }
