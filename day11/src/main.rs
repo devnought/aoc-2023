@@ -1,5 +1,4 @@
-use std::{collections::HashMap, fs, iter::repeat, ops::Range};
-
+use humantime::format_duration;
 use nom::{
     character::complete::char,
     combinator::map,
@@ -7,16 +6,34 @@ use nom::{
     sequence::tuple,
     Finish, IResult,
 };
+use std::{collections::HashMap, fs, iter::repeat, ops::Range, time::Instant};
 
 fn main() -> anyhow::Result<()> {
+    let now = Instant::now();
+
     let data = fs::read_to_string("day11.txt")?;
     let galaxies = parse_data(data);
+    let parsed_time = now.elapsed();
 
-    let res = part01(&galaxies);
-    println!("Part 01: {res}");
+    let res1 = part01(&galaxies);
+    let part1_time = now.elapsed();
 
-    let res = part02(&galaxies);
-    println!("Part 02: {res}");
+    let res2 = part02(&galaxies);
+    let part2_time = now.elapsed();
+
+    println!("Part 01: {res1}");
+    println!("Part 02: {res2}");
+    println!();
+    println!("Parsing time:  {}", format_duration(parsed_time));
+    println!(
+        "Part 1 time:   {}",
+        format_duration(part1_time - parsed_time)
+    );
+    println!(
+        "Part 2 time:   {}",
+        format_duration(part2_time - part1_time)
+    );
+    println!("Total elapsed: {}", format_duration(part2_time));
 
     Ok(())
 }
